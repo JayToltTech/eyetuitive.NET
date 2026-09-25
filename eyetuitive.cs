@@ -26,7 +26,9 @@ namespace GazeFirst
         private CancellationTokenSource _connectionCts = new CancellationTokenSource();
         private readonly object _connectionLock = new object();
         private bool _isConnecting = false, _isConnected = false, _monitoring = false;
+        private volatile bool _disposed = false;
         private Task<bool> _connectionTask;
+        private static readonly TimeSpan ReconnectTimeout = TimeSpan.FromSeconds(5);
 
         //Internal functions
         private Position position;
@@ -252,8 +254,9 @@ namespace GazeFirst
                         // The deadline honours timeoutInSeconds, which this target otherwise ignored.
                         var info = await _client.GetDeviceInfoAsync(new Empty(),
                             deadline: DateTime.UtcNow.AddSeconds(timeoutInSeconds));
+                        if (info.Serial == 0) return false;
                         MonitorConnection();
-                        return (info.Serial != 0);
+                        return true;
 #endif
                     }
                     catch (TaskCanceledException)
@@ -304,10 +307,14 @@ namespace GazeFirst
         /// </summary>
         private void MonitorConnection()
         {
-            if (_monitoring) return;
+            if (_monitoring || _disposed) return;
             Settings?.updateHostSettings();
-            UsbDeviceMonitor.ConnectedChanged += OnConnectedChanged;
-            _monitoring = true;
+            lock (_connectionLock)
+            {
+                if (_monitoring || _disposed) return;
+                UsbDeviceMonitor.ConnectedChanged += OnConnectedChanged;
+                _monitoring = true;
+            }
         }
 
         /// <summary>
@@ -316,22 +323,30 @@ namespace GazeFirst
         /// <param name="isConnected"></param>
         private async void OnConnectedChanged(bool isConnected)
         {
-            _logger?.LogInformation($"USB device connection status changed: {isConnected}");
-            if (!isConnected)
-            {
-                // Device disconnected - nothing to do, the event already notified subscribers
-                return;
-            }
-
+            // async void on the WMI event thread: anything that escapes ends the process.
             try
             {
+                if (_disposed) return;
+                _logger?.LogInformation($"USB device connection status changed: {isConnected}");
+                if (!isConnected)
+                {
+                    // Device disconnected - nothing to do, the event already notified subscribers
+                    return;
+                }
+
                 _client = new EyetrackerClient(_channel);
 #if NET6_0_OR_GREATER
-                await _channel.ConnectAsync();
+                using (var cts = new CancellationTokenSource(ReconnectTimeout))
+                {
+                    await _channel.ConnectAsync(cts.Token);
+                }
+                if (_disposed) return;
                 Reconnect();
                 Settings?.updateHostSettings();
 #else
-                var info = await _client.GetDeviceInfoAsync(new Empty());
+                var info = await _client.GetDeviceInfoAsync(new Empty(),
+                    deadline: DateTime.UtcNow.Add(ReconnectTimeout));
+                if (_disposed) return;
                 if(info.Serial != 0)
                 {
                     Reconnect();
@@ -339,7 +354,7 @@ namespace GazeFirst
                 }
 #endif
             }
-            catch (Grpc.Core.RpcException ex)
+            catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to reconnect to eye tracker after connection change");
             }
@@ -350,6 +365,16 @@ namespace GazeFirst
         /// </summary>
         public void Dispose()
         {
+            lock (_connectionLock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                if (_monitoring)
+                {
+                    UsbDeviceMonitor.ConnectedChanged -= OnConnectedChanged;
+                    _monitoring = false;
+                }
+            }
             _connectionCts?.Cancel();
             _connectionCts?.Dispose();
             _channel?.ShutdownAsync().Wait();
