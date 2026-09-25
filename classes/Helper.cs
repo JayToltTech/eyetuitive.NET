@@ -2,6 +2,7 @@
 using System.Management;
 using System.Runtime.InteropServices;
 using Google.Protobuf;
+using Microsoft.Extensions.Logging;
 
 namespace eyetuitive.NET.classes
 {
@@ -40,6 +41,10 @@ namespace eyetuitive.NET.classes
 #endif
         }
 
+        private static readonly TimeSpan HostQueryTimeout = TimeSpan.FromSeconds(5);
+        // Set only by a successful query; a failure is retried on the next call.
+        private static volatile Tuple<string, string> _hostInfo;
+
         /// <summary>
         /// Get the computer manufacturer and model information
         /// </summary>
@@ -48,21 +53,26 @@ namespace eyetuitive.NET.classes
         {
             if(!IsWindowsPlatform()) return ("Unknown", "Unknown"); //Check if running on Windows platform, if not, return unknown values
 
+            var cached = _hostInfo;
+            if (cached != null) return (cached.Item1, cached.Item2);
+
             try
             {
-                using (var searcher = new ManagementObjectSearcher("SELECT Manufacturer, Model FROM Win32_ComputerSystem"))
+                var options = new EnumerationOptions { Timeout = HostQueryTimeout };
+                using (var searcher = new ManagementObjectSearcher(null, "SELECT Manufacturer, Model FROM Win32_ComputerSystem", options))
                 {
                     foreach (var obj in searcher.Get())
                     {
                         string manufacturer = obj["Manufacturer"]?.ToString() ?? "Unknown";
                         string model = obj["Model"]?.ToString() ?? "Unknown";
+                        _hostInfo = Tuple.Create(manufacturer, model);
                         return (manufacturer, model);
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Optional: log exception
+                GazeFirst.eyetuitive._logger?.LogWarning(ex, "Failed to query computer vendor and model");
             }
 
             return ("Unknown", "Unknown");
