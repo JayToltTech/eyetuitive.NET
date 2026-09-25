@@ -1,4 +1,5 @@
 ﻿using GazeFirst;
+using System;
 
 namespace GazeFirst.functions
 {
@@ -11,6 +12,11 @@ namespace GazeFirst.functions
         /// The client
         /// </summary>
         internal Eyetracker.EyetrackerClient _client;
+
+        /// <summary>
+        /// Deadline for blocking calls that take no timeout from the caller
+        /// </summary>
+        internal static readonly TimeSpan DefaultCallTimeout = TimeSpan.FromSeconds(5);
 
         /// <summary>
         /// ClientBased constructor
