@@ -377,7 +377,8 @@ namespace GazeFirst
             }
             _connectionCts?.Cancel();
             _connectionCts?.Dispose();
-            _channel?.ShutdownAsync().Wait();
+            // Bounded so a stuck shutdown cannot hang the caller, which is often a UI thread.
+            _channel?.ShutdownAsync().Wait(TimeSpan.FromSeconds(1));
         }
     }
 }
