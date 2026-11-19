@@ -168,6 +168,8 @@ namespace GazeFirst
         {
             lock (_connectionLock)
             {
+                if (_disposed)
+                    throw new ObjectDisposedException(nameof(eyetuitive));
                 if (_isConnecting)
                 {
                     // Return the existing task if a connection attempt is already in progress
@@ -247,6 +249,7 @@ namespace GazeFirst
 #if NET6_0_OR_GREATER
                         var token = CancellationTokenSource.CreateLinkedTokenSource(_connectionCts.Token, new CancellationTokenSource(TimeSpan.FromSeconds(timeoutInSeconds)).Token).Token;
                         await _channel.ConnectAsync(token);
+                        Reconnect();
                         MonitorConnection();
                         return true;
 #else
@@ -255,6 +258,7 @@ namespace GazeFirst
                         var info = await _client.GetDeviceInfoAsync(new Empty(),
                             deadline: DateTime.UtcNow.AddSeconds(timeoutInSeconds));
                         if (info.Serial == 0) return false;
+                        Reconnect();
                         MonitorConnection();
                         return true;
 #endif
