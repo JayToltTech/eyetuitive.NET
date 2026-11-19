@@ -23,9 +23,10 @@ Use this repo / its published nuget package to integrate eyetuitive in your next
 
 You can connect to eyetuitive via gRPC. Since the transport is based on HTTP/2, you need support for that. Also, ensure you can access the device via the network. The service runs on host eyetracker.local, port 12340.
 
-## Note on legacy .NET versions
+## Note on (legacy) .NET versions
 
-This library supports .NET 8 and .NET 10 (both LTS). However, .NET Framework 4.6.2 and later are only supported on Windows 11, since some underlying legacy gRPC implementations only support WinHttpHandler with http2 in Windows 11.
+This library supports .NET 10 (LTS). However, .NET Framework 4.6.2 and later are only supported on Windows 11, since some underlying legacy gRPC implementations only support WinHttpHandler with http2 in Windows 11.
+Please note: .NET Framework 4.6.2 is EOL Jan 2027 and support will be dropped. The next supported version will be .NET Framework 4.7.
 
 ## Sample
 
@@ -73,4 +74,4 @@ Distributed under our custom license. See [license file](LICENSE.md) for more in
 
 ## About
 
-(c) 2024 - 2026 GazeFirst GmbH. Author: Mathias Anhalt
+(c) 2024 - 2026 GazeFirst GmbH. Authors: Mathias Anhalt, Jay Beavers
