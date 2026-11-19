@@ -72,9 +72,20 @@ namespace GazeFirst.functions
         /// <returns></returns>
         public (long serialNumber, string firmwareVersion, int hardwareConfig, double cpuTemp) GetDeviceInfo()
         {
+            return GetDeviceInfo(DefaultCallTimeout);
+        }
+
+        /// <summary>
+        /// Return device info, giving up after timeout (serial number 0 on failure or timeout)
+        /// </summary>
+        /// <param name="timeout"></param>
+        /// <returns></returns>
+        public (long serialNumber, string firmwareVersion, int hardwareConfig, double cpuTemp) GetDeviceInfo(TimeSpan timeout)
+        {
             try
             {
-                var result = _client.GetDeviceInfo(new Google.Protobuf.WellKnownTypes.Empty());
+                var result = _client.GetDeviceInfo(new Google.Protobuf.WellKnownTypes.Empty(),
+                    deadline: DateTime.UtcNow.Add(timeout));
                 return (result.Serial, result.Version, result.HwConfig, result.CpuTemp);
             }
             catch (Exception ex)
@@ -138,7 +149,8 @@ namespace GazeFirst.functions
                         }
                     }
                 };
-                _settings = _client.Configure(configuration); //Update settings
+                _settings = _client.Configure(configuration,
+                    deadline: DateTime.UtcNow.Add(DefaultCallTimeout)); //Update settings
                 return true;
             }
             catch (Exception ex)
